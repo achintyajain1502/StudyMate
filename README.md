@@ -65,7 +65,9 @@ StudyMate/
     ├── public/
     └── package.json
 
-## How It Works
+---
+
+# How It Works
 
 1. User uploads a PDF file.
 2. Backend extracts text using `pdf-parse`.
@@ -89,6 +91,8 @@ cd StudyMate
 ```bash
 cd backend
 npm install
+
+---
 
 Create a .env file inside the backend folder:
 
