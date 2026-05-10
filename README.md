@@ -37,19 +37,6 @@ Frontend: https://studymate-pink.vercel.app/
 - Vercel
 - Railway
 
-### Frontend
-- React
-- Vite
-- Axios
-- jsPDF
-
-### Backend
-- Node.js
-- Express.js
-- Multer
-- pdf-parse
-- Gemini API
-
 ## Project Structure
 
 ```text
@@ -85,47 +72,66 @@ Clone the repository:
 ```bash
 git clone https://github.com/achintyajain1502/StudyMate.git
 cd StudyMate
-```
 # Backend Setup
 
 ```bash
 cd backend
 npm install
+```
 
----
+Create a `.env` file inside the backend folder:
 
-Create a .env file inside the backend folder:
-
+```env
 GEMINI_API_KEY=your_gemini_api_key_here
+```
+
 ---
 
-##Run backend:
+## Run Backend
 
+```bash
 npm start
+```
 
-##Backend runs on:
+Backend runs on:
 
+```text
 http://localhost:8000
+```
 
-#Frontend Setup
+---
 
-##Open a new terminal:
+# Frontend Setup
 
+Open a new terminal:
+
+```bash
 cd frontend
 npm install
 npm run dev
+```
 
-##Frontend runs on:
+Frontend runs on:
 
+```text
 http://localhost:5173
+```
 
-#Deployment
-Frontend deployed on Vercel
-Backend deployed on Railway
-Environment Variables
+---
 
-##Backend requires:
+# Deployment
 
+- Frontend deployed on Vercel
+- Backend deployed on Railway
+
+---
+
+# Environment Variables
+
+Backend requires:
+
+```env
 GEMINI_API_KEY=your_gemini_api_key_here
+```
 
-Do not upload .env to GitHub.
+Do not upload `.env` to GitHub.
