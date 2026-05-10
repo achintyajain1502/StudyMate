@@ -48,7 +48,7 @@ function App() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await axios.post("studymate-production-897e.up.railway.app/upload", formData);
+      const res = await axios.post("https://studymate-production-897e.up.railway.app/upload", formData);
 
       console.log("UPLOAD SUCCESS:", res.data);
 
