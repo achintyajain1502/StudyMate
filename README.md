@@ -66,7 +66,7 @@ StudyMate/
     └── package.json
 
 ---
-
+```
 # How It Works
 
 1. User uploads a PDF file.
@@ -85,7 +85,7 @@ Clone the repository:
 ```bash
 git clone https://github.com/achintyajain1502/StudyMate.git
 cd StudyMate
-
+```
 # Backend Setup
 
 ```bash
@@ -97,6 +97,7 @@ npm install
 Create a .env file inside the backend folder:
 
 GEMINI_API_KEY=your_gemini_api_key_here
+---
 
 ##Run backend:
 
