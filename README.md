@@ -4,7 +4,7 @@ StudyMate is an AI-powered Notes Search Engine using RAG concepts. It allows use
 
 ## Live Demo
 
-Frontend: https://studymate-pink.vercel.app/
+Frontend: https://studymate-dev.vercel.app/
 
 ## Features
 
