@@ -63,7 +63,7 @@ function App() {
         "Upload failed";
 
       setStatus(message);
-      alert(message);
+      alert(typeof message === "string" ? message : JSON.stringify(message));
     } finally {
       setIsUploading(false);
     }
@@ -80,7 +80,7 @@ function App() {
       setStatus("Generating answer...");
       setAnswer("");
 
-      const res = await axios.post("studymate-production-897e.up.railway.app/ask", {
+      const res = await axios.post("https://studymate-production-897e.up.railway.app/ask", {
         question,
       });
 
@@ -97,7 +97,7 @@ function App() {
         "Answer failed";
 
       setStatus(message);
-      alert(message);
+      alert(typeof message === "string" ? message : JSON.stringify(message));
     } finally {
       setIsAsking(false);
     }
