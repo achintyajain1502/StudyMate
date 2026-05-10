@@ -10,7 +10,7 @@ const { GoogleGenAI } = require("@google/genai");
 
 const app = express();
 
-app.use(cors());
+app.use(cors({origin: "*",methods: ["GET", "POST"],}));
 app.use(express.json());
 
 const uploadDir = path.join(__dirname, "uploads");
@@ -106,6 +106,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       chunks: notesChunks.length,
     });
   } catch (error) {
+    console.log("UPLOAD ERROR:", error);
     if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
