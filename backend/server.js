@@ -168,15 +168,16 @@ ${question}
 `;
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-    });
+  model: "gemini-2.0-flash",
+});
 
-    const result = await model.generateContent(prompt);
-    const response = result.response;
+const result = await model.generateContent(prompt);
 
-    return res.json({
-      answer: response.text(),
-    });
+const response = await result.response;
+
+return res.json({
+  answer: response.text(),
+});
   } catch (error) {
     console.log("ASK ERROR:", error);
 
