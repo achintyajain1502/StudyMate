@@ -6,11 +6,17 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
-const { GoogleGenAI } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 
-app.use(cors({origin: "*",methods: ["GET", "POST"],}));
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST"],
+  })
+);
+
 app.use(express.json());
 
 const uploadDir = path.join(__dirname, "uploads");
@@ -28,9 +34,7 @@ const upload = multer({
 
 let notesChunks = [];
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.get("/", (req, res) => {
   res.send("StudyMate backend is running");
@@ -107,6 +111,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     });
   } catch (error) {
     console.log("UPLOAD ERROR:", error);
+
     if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
@@ -124,7 +129,7 @@ app.post("/ask", async (req, res) => {
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
-        error: "Gemini API key missing in .env file",
+        error: "Gemini API key missing in Railway variables.",
       });
     }
 
@@ -162,15 +167,19 @@ Question:
 ${question}
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
     });
 
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+
     return res.json({
-      answer: response.text,
+      answer: response.text(),
     });
   } catch (error) {
+    console.log("ASK ERROR:", error);
+
     if (error.message && error.message.includes("429")) {
       return res.status(429).json({
         error: "Daily Gemini quota exceeded. Try again later.",
@@ -184,8 +193,8 @@ ${question}
   }
 });
 
-const PORT = process.env.PORT || 8000;
+const PORT = 8000;
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
