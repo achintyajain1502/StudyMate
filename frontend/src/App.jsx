@@ -1,69 +1,104 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import axios from "axios";
 import jsPDF from "jspdf";
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://studymate-backend-mu7z.onrender.com";
 
 function App() {
   const [file, setFile] = useState(null);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState({
+    type: "idle",
+    title: "Ready when your notes are.",
+    message: "Upload a PDF, then ask StudyMate a question from it.",
+  });
   const [isUploading, setIsUploading] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
 
+  const answerPoints = useMemo(
+    () =>
+      answer
+        .split(/\n(?=\d+\.\s)/)
+        .map((point) => point.trim())
+        .filter(Boolean),
+    [answer]
+  );
+
+  const setErrorStatus = (fallbackTitle, error) => {
+    const data = error.response?.data;
+    const title = data?.error || fallbackTitle;
+    const message = data?.details || error.message || "Please try again.";
+
+    setStatus({
+      type: "error",
+      title,
+      message,
+    });
+  };
+
   const downloadAnswerPDF = () => {
-  if (!answer) {
-    alert("No answer to download");
-    return;
-  }
+    if (!answer) {
+      setStatus({
+        type: "error",
+        title: "No answer to download.",
+        message: "Ask a question first, then download the answer as a PDF.",
+      });
+      return;
+    }
 
-  const doc = new jsPDF();
+    const doc = new jsPDF();
 
-  doc.setFontSize(18);
-  doc.text("StudyMate Answer", 10, 15);
+    doc.setFontSize(18);
+    doc.text("StudyMate Answer", 10, 15);
 
-  doc.setFontSize(12);
-
-  const lines = doc.splitTextToSize(answer, 180);
-  doc.text(lines, 10, 30);
-
-  doc.save("answer.pdf");
-};
+    doc.setFontSize(12);
+    const lines = doc.splitTextToSize(answer, 180);
+    doc.text(lines, 10, 30);
+    doc.save("studymate-answer.pdf");
+  };
 
   const uploadFile = async () => {
     try {
       if (!file) {
-        alert("Please select a PDF first");
+        setStatus({
+          type: "error",
+          title: "Choose a PDF first.",
+          message: "StudyMate needs one text-based PDF before it can answer.",
+        });
         return;
       }
 
       if (file.type !== "application/pdf") {
-        alert("Please select only a PDF file");
+        setStatus({
+          type: "error",
+          title: "Only PDFs are supported.",
+          message: "Select a text-based PDF file and upload it again.",
+        });
         return;
       }
 
       setIsUploading(true);
-      setStatus("Uploading PDF...");
       setAnswer("");
+      setStatus({
+        type: "loading",
+        title: "Uploading notes...",
+        message: "Reading your PDF and preparing searchable chunks.",
+      });
 
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await axios.post("https://studymate-backend-mu7z.onrender.com/upload", formData);
+      const res = await axios.post(`${API_BASE_URL}/upload`, formData);
 
-      console.log("UPLOAD SUCCESS:", res.data);
-
-      setStatus(`Uploaded successfully.`);
-      alert("PDF uploaded successfully");
+      setStatus({
+        type: "success",
+        title: "Notes uploaded.",
+        message: `${res.data.chunks || "Your"} chunks are ready for questions.`,
+      });
     } catch (error) {
-      console.log("UPLOAD FAILED:", error.response?.data || error.message);
-
-      const message =
-        error.response?.data?.details ||
-        error.response?.data?.error ||
-        "Upload failed";
-
-      setStatus(message);
-      alert(typeof message === "string" ? message : JSON.stringify(message));
+      setErrorStatus("Upload failed.", error);
     } finally {
       setIsUploading(false);
     }
@@ -72,119 +107,152 @@ function App() {
   const askQuestion = async () => {
     try {
       if (!question.trim()) {
-        alert("Please enter a question");
+        setStatus({
+          type: "error",
+          title: "Enter a question.",
+          message: "Ask something specific from your uploaded notes.",
+        });
         return;
       }
 
       setIsAsking(true);
-      setStatus("Generating answer...");
       setAnswer("");
+      setStatus({
+        type: "loading",
+        title: "Generating answer...",
+        message: "Finding the most relevant note sections.",
+      });
 
-      const res = await axios.post("https://studymate-backend-mu7z.onrender.com/ask", {
+      const res = await axios.post(`${API_BASE_URL}/ask`, {
         question,
       });
 
-      console.log("ASK SUCCESS:", res.data);
-
-      setAnswer(res.data.answer);
-      setStatus("Answer generated successfully");
+      setAnswer(res.data.answer || "");
+      setStatus({
+        type: "success",
+        title: "Answer generated.",
+        message: "StudyMate answered using the uploaded notes.",
+      });
     } catch (error) {
-      console.log("ASK FAILED:", error.response?.data || error.message);
-
-      const message =
-        error.response?.data?.details ||
-        error.response?.data?.error ||
-        "Answer failed";
-
-      setStatus(message);
-      alert(typeof message === "string" ? message : JSON.stringify(message));
+      setErrorStatus("Answer failed.", error);
     } finally {
       setIsAsking(false);
     }
   };
 
   return (
-    
-    <div style={{ padding: "30px", textAlign: "center", fontFamily: "times new roman", maxWidth: "500px",backgroundColor: "#3b66ab", margin: "50px auto", borderRadius: "10px", boxShadow: "10px 10px 10px rgba(233, 246, 134, 0.1)" }}>
-      <h1>StudyMate</h1>
-      <h2>AI Notes Search Engine using RAG</h2>
+    <main className="app-shell">
+      <section className="hero-panel" aria-labelledby="app-title">
+        <div>
+          <p className="eyebrow">AI notes assistant</p>
+          <h1 id="app-title">StudyMate</h1>
+          <p className="hero-copy">
+            Upload lecture notes, ask focused questions, and keep clean answers ready to
+            download.
+          </p>
+        </div>
+        <div className="service-pill">
+          <span className={`status-dot ${status.type}`} />
+          <span>{status.title}</span>
+        </div>
+      </section>
 
-      <hr />
+      <section className="workspace-grid">
+        <div className="panel">
+          <div className="panel-heading">
+            <span className="step">01</span>
+            <div>
+              <h2>Upload PDF Notes</h2>
+              <p>Use a text-based PDF for the best results.</p>
+            </div>
+          </div>
 
-      <h3 style={{ color: "white" }}>Upload PDF Notes</h3>
+          <label className="file-drop">
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(event) => {
+                const selectedFile = event.target.files[0] || null;
+                setFile(selectedFile);
+                setStatus({
+                  type: selectedFile ? "idle" : "error",
+                  title: selectedFile ? "PDF selected." : "No file selected.",
+                  message: selectedFile
+                    ? selectedFile.name
+                    : "Choose a PDF before uploading.",
+                });
+              }}
+            />
+            <span className="file-icon">PDF</span>
+            <strong>{file ? file.name : "Choose your notes"}</strong>
+            <small>{file ? "Ready to upload" : "PDF files up to 10 MB"}</small>
+          </label>
 
-      <input
-        style={{ color: "white",textAlign: "justify", fontSize: "16px" }}
-        type="file"
-        accept="application/pdf"
-        onChange={(e) => {
-          const selectedFile = e.target.files[0];
-          setFile(selectedFile);
-          setStatus(selectedFile ? `Selected: ${selectedFile.name}` : "");
-        }}
-      />
+          <button className="primary-button" onClick={uploadFile} disabled={isUploading}>
+            {isUploading ? "Uploading..." : "Upload Notes"}
+          </button>
+        </div>
 
-      <br />
-      <br />
+        <div className="panel">
+          <div className="panel-heading">
+            <span className="step">02</span>
+            <div>
+              <h2>Ask a Question</h2>
+              <p>Be specific so the answer can stay grounded in your notes.</p>
+            </div>
+          </div>
 
-      <button style={{ borderRadius: "10px",backgroundColor:  "#5cb85c", color: "white", padding: "10px 20px", fontSize: "16px",border: "none"}}
-       onClick={uploadFile} disabled={isUploading}>
-        {isUploading ? "Uploading..." : "Upload"}
-      </button>
+          <textarea
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder="Example: Explain the main points of unit 2..."
+            rows={5}
+          />
 
-      <hr />
+          <button className="accent-button" onClick={askQuestion} disabled={isAsking}>
+            {isAsking ? "Thinking..." : "Ask StudyMate"}
+          </button>
+        </div>
+      </section>
 
-      <h3 style={{ color: "white" }}>Ask Question</h3>
+      <section className={`status-banner ${status.type}`} role="status">
+        <strong>{status.title}</strong>
+        <span>{status.message}</span>
+      </section>
 
-      <input
-        style={{ width: "400px", padding: "10px",borderRadius: "5px", border: "1px solid #ccc", fontSize: "16px" }}
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-        placeholder="Ask from notes..."
-      />
+      <section className="answer-panel">
+        <div className="answer-heading">
+          <div>
+            <p className="eyebrow">Response</p>
+            <h2>Answer</h2>
+          </div>
+          <button className="ghost-button" onClick={downloadAnswerPDF} disabled={!answer}>
+            Download PDF
+          </button>
+        </div>
 
-      <button onClick={askQuestion} disabled={isAsking}
-        style={{ borderRadius: "10px",backgroundColor:  "#f0ad4e", color: "white", padding: "10px 20px", fontSize: "16px",border: "none"}}>
-          {isAsking ? "Thinking..." : "Ask"}
-      </button>
+        {answerPoints.length > 0 ? (
+          <div className="answer-list">
+            {answerPoints.map((point, index) => (
+              <p key={index}>{point}</p>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-answer">
+            <strong>Your answer will appear here.</strong>
+            <span>Upload notes and ask a question to get a numbered response.</span>
+          </div>
+        )}
+      </section>
 
-      <h3 style={{ color: "white" }}>Status</h3>
-      <p style={{ textAlign: "center",color: "white" }}>{status}</p>
-
-     <h3 style={{ color: "white" }}>Answer</h3>
-<button
-  onClick={() =>window.scrollTo({top: 0,behavior: "smooth",})  }
-  style={{position: "fixed",bottom: "20px",right: "20px",width: "60px",height: "60px",border: "none",borderRadius: "50%",backgroundColor: "white",
-    cursor: "pointer",zIndex: 9999,display: "flex",alignItems: "center",justifyContent: "center",boxShadow: "0 0 10px rgba(0,0,0,0.3)",}}>
-  <img
-    src="/uparrow.png"
-    alt="Scroll to Top"
-    style={{width: "35px",height: "35px",objectFit: "contain",}}/>
-</button>
-<div
-  style={{color: "yellow",textAlign: "left",lineHeight: "1.8",fontSize: "20px",}}>
-  {answer
-    .split(/\n(?=\d+\.\s)/)
-    .filter((point) => point.trim() !== "")
-    .map((point, index) => (
-      <p
-        key={index}
-        style={{
-          marginBottom: "12px",
-          lineHeight: "1.6",
-        }}
+      <button
+        className="scroll-top"
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label="Scroll to top"
       >
-        {point.trim()}
-      </p>
-    ))}
-</div>
-
-<button
-  onClick={downloadAnswerPDF}
-  style={{borderRadius: "10px",backgroundColor: "#d9534f",color: "white",padding: "10px 20px",fontSize: "16px",border: "none",cursor: "pointer",}}>
-  Download Answer
-</button>
-  </div>
+        <img src="/uparrow.png" alt="" />
+      </button>
+    </main>
   );
 }
 

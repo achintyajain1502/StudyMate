@@ -34,11 +34,66 @@ const upload = multer({
 
 let notesChunks = [];
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 app.get("/", (req, res) => {
   res.send("StudyMate backend is running");
 });
+
+function getGeminiApiKey() {
+  return (process.env.GEMINI_API_KEY || "").trim();
+}
+
+function getGeminiModel() {
+  const apiKey = getGeminiApiKey();
+
+  if (!apiKey) {
+    return null;
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  return genAI.getGenerativeModel({
+    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+  });
+}
+
+function getErrorStatus(error) {
+  return error?.status || error?.statusCode || error?.response?.status;
+}
+
+function classifyGeminiError(error) {
+  const status = getErrorStatus(error);
+  const message = String(error?.message || "");
+  const lowerMessage = message.toLowerCase();
+
+  if (status === 400 || lowerMessage.includes("api key not valid")) {
+    return {
+      status: 401,
+      error: "Gemini API key is invalid.",
+      details: "Check GEMINI_API_KEY in your backend environment, then restart or redeploy the backend.",
+    };
+  }
+
+  if (status === 401 || status === 403 || lowerMessage.includes("permission")) {
+    return {
+      status: 403,
+      error: "Gemini API key is not authorized for this request.",
+      details: "Verify the key belongs to the right Google AI Studio project and has access to the selected Gemini model.",
+    };
+  }
+
+  if (status === 429 || lowerMessage.includes("quota") || lowerMessage.includes("rate limit")) {
+    return {
+      status: 429,
+      error: "Gemini usage limit reached.",
+      details: "This can be a per-minute rate limit or project quota limit. Try again later, switch GEMINI_MODEL, or use a key from a project with available quota.",
+    };
+  }
+
+  return {
+    status: 500,
+    error: "Answer failed",
+    details: message || "Unexpected Gemini error",
+  };
+}
 
 function chunkText(text, size = 500) {
   const words = text.split(/\s+/).filter(Boolean);
@@ -127,9 +182,12 @@ app.post("/ask", async (req, res) => {
   try {
     const { question } = req.body;
 
-    if (!process.env.GEMINI_API_KEY) {
+    const model = getGeminiModel();
+
+    if (!model) {
       return res.status(500).json({
-        error: "Gemini API key missing in Railway variables.",
+        error: "Gemini API key missing.",
+        details: "Set GEMINI_API_KEY in your backend environment and restart the backend.",
       });
     }
 
@@ -167,29 +225,20 @@ Question:
 ${question}
 `;
 
-    const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
-});
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
 
-const result = await model.generateContent(prompt);
-
-const response = await result.response;
-
-return res.json({
-  answer: response.text(),
-});
+    return res.json({
+      answer: response.text(),
+    });
   } catch (error) {
     console.log("ASK ERROR:", error);
 
-    if (error.message && error.message.includes("429")) {
-      return res.status(429).json({
-        error: "Daily Gemini quota exceeded. Try again later.",
-      });
-    }
+    const geminiError = classifyGeminiError(error);
 
-    return res.status(500).json({
-      error: "Answer failed",
-      details: error.message,
+    return res.status(geminiError.status).json({
+      error: geminiError.error,
+      details: geminiError.details,
     });
   }
 });
