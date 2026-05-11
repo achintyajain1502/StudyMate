@@ -28,8 +28,15 @@ function App() {
 
   const setErrorStatus = (fallbackTitle, error) => {
     const data = error.response?.data;
-    const title = data?.error || fallbackTitle;
-    const message = data?.details || error.message || "Please try again.";
+    const statusCode = error.response?.status;
+    const title =
+      data?.error ||
+      (statusCode === 429 ? "Gemini usage limit reached." : fallbackTitle);
+    const message =
+      data?.details ||
+      (statusCode === 429
+        ? "Your Gemini project is currently rate-limited or out of quota. Add a fresh backend key, set GEMINI_API_KEYS for backups, then redeploy the backend."
+        : error.message || "Please try again.");
 
     setStatus({
       type: "error",

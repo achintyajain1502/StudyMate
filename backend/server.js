@@ -38,21 +38,69 @@ app.get("/", (req, res) => {
   res.send("StudyMate backend is running");
 });
 
-function getGeminiApiKey() {
-  return (process.env.GEMINI_API_KEY || "").trim();
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    gemini: getGeminiConfigSummary(),
+  });
+});
+
+function getGeminiApiKeys() {
+  const primaryKey = process.env.GEMINI_API_KEY || "";
+  const keyList = process.env.GEMINI_API_KEYS || "";
+  const numberedKeys = Object.keys(process.env)
+    .filter((key) => /^GEMINI_API_KEY_\d+$/.test(key))
+    .sort()
+    .map((key) => process.env[key]);
+
+  return [primaryKey, keyList, ...numberedKeys]
+    .flatMap((value) => String(value || "").split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
-function getGeminiModel() {
-  const apiKey = getGeminiApiKey();
-
-  if (!apiKey) {
-    return null;
-  }
-
+function getGeminiModel(apiKey) {
   const genAI = new GoogleGenerativeAI(apiKey);
   return genAI.getGenerativeModel({
     model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
   });
+}
+
+function getGeminiConfigSummary() {
+  return {
+    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+    keyCount: getGeminiApiKeys().length,
+  };
+}
+
+async function generateGeminiAnswer(prompt) {
+  const apiKeys = getGeminiApiKeys();
+
+  if (apiKeys.length === 0) {
+    const missingKeyError = new Error("GEMINI_API_KEY is missing");
+    missingKeyError.status = 500;
+    throw missingKeyError;
+  }
+
+  let lastError;
+
+  for (const apiKey of apiKeys) {
+    try {
+      const model = getGeminiModel(apiKey);
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      lastError = error;
+      const geminiError = classifyGeminiError(error);
+
+      if (geminiError.status !== 429) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 function getErrorStatus(error) {
@@ -63,12 +111,13 @@ function classifyGeminiError(error) {
   const status = getErrorStatus(error);
   const message = String(error?.message || "");
   const lowerMessage = message.toLowerCase();
+  const config = getGeminiConfigSummary();
 
   if (status === 400 || lowerMessage.includes("api key not valid")) {
     return {
       status: 401,
       error: "Gemini API key is invalid.",
-      details: "Check GEMINI_API_KEY in your backend environment, then restart or redeploy the backend.",
+      details: `Check GEMINI_API_KEY in your backend environment, then restart or redeploy the backend. Active model: ${config.model}. Keys detected: ${config.keyCount}.`,
     };
   }
 
@@ -76,7 +125,7 @@ function classifyGeminiError(error) {
     return {
       status: 403,
       error: "Gemini API key is not authorized for this request.",
-      details: "Verify the key belongs to the right Google AI Studio project and has access to the selected Gemini model.",
+      details: `Verify the key belongs to the right Google AI Studio project and has access to the selected Gemini model. Active model: ${config.model}. Keys detected: ${config.keyCount}.`,
     };
   }
 
@@ -84,7 +133,7 @@ function classifyGeminiError(error) {
     return {
       status: 429,
       error: "Gemini usage limit reached.",
-      details: "This can be a per-minute rate limit or project quota limit. Try again later, switch GEMINI_MODEL, or use a key from a project with available quota.",
+      details: `Gemini returned 429 for every configured key. Active model: ${config.model}. Keys detected: ${config.keyCount}. Add keys from a different Google Cloud/AI Studio project in GEMINI_API_KEYS, or set GEMINI_MODEL to a model with available quota, then redeploy the backend.`,
     };
   }
 
@@ -182,9 +231,9 @@ app.post("/ask", async (req, res) => {
   try {
     const { question } = req.body;
 
-    const model = getGeminiModel();
+    const apiKeys = getGeminiApiKeys();
 
-    if (!model) {
+    if (apiKeys.length === 0) {
       return res.status(500).json({
         error: "Gemini API key missing.",
         details: "Set GEMINI_API_KEY in your backend environment and restart the backend.",
@@ -225,11 +274,8 @@ Question:
 ${question}
 `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-
     return res.json({
-      answer: response.text(),
+      answer: await generateGeminiAnswer(prompt),
     });
   } catch (error) {
     console.log("ASK ERROR:", error);
