@@ -48,7 +48,7 @@ function App() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await axios.post("https://studymate-production-897e.up.railway.app/upload", formData);
+      const res = await axios.post("https://studymate-backend-mu7z.onrender.com/upload", formData);
 
       console.log("UPLOAD SUCCESS:", res.data);
 
@@ -80,7 +80,7 @@ function App() {
       setStatus("Generating answer...");
       setAnswer("");
 
-      const res = await axios.post("https://studymate-production-897e.up.railway.app/ask", {
+      const res = await axios.post("https://studymate-backend-mu7z.onrender.com/ask", {
         question,
       });
 
