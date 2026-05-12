@@ -1,6 +1,6 @@
 # StudyMate
 
-StudyMate is an AI-powered Notes Search Engine using RAG concepts. It allows users to upload PDF notes and ask questions from the uploaded content. The app extracts text from the PDF, searches relevant chunks, and generates answers using Gemini AI.
+StudyMate is an AI-powered Notes Search Engine using RAG concepts. It allows users to upload PDF notes and ask questions from the uploaded content. The app extracts text from the PDF, searches relevant chunks, and generates answers using OpenAI.
 
 ## Live Demo
 
@@ -36,7 +36,7 @@ StudyMate is an AI-powered Notes Search Engine using RAG concepts. It allows use
 - pdf-parse
 
 ## AI Integration
-- Google Gemini API
+- OpenAI API
 
 ## Deployment
 - Vercel
@@ -65,7 +65,7 @@ StudyMate/
 2. Backend extracts text using `pdf-parse`.
 3. Text is divided into smaller chunks.
 4. Relevant chunks are selected based on the user question.
-5. Gemini AI generates an answer using the selected notes.
+5. OpenAI generates an answer using the selected notes.
 6. Answer is displayed in point-wise format.
 
 ---
@@ -87,7 +87,8 @@ npm install
 Create a `.env` file inside the backend folder:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4.1-mini
 ```
 
 ---
@@ -136,7 +137,8 @@ http://localhost:5173
 Backend requires:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4.1-mini
 ```
 
 Do not upload `.env` to GitHub.

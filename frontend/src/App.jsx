@@ -31,11 +31,11 @@ function App() {
     const statusCode = error.response?.status;
     const title =
       data?.error ||
-      (statusCode === 429 ? "Gemini usage limit reached." : fallbackTitle);
+      (statusCode === 429 ? "OpenAI usage limit reached." : fallbackTitle);
     const message =
       data?.details ||
       (statusCode === 429
-        ? "Your Gemini project is currently rate-limited or out of quota. Add a fresh backend key, set GEMINI_API_KEYS for backups, then redeploy the backend."
+        ? "Your OpenAI project is currently rate-limited or out of quota. Check billing/usage limits or set another OPENAI_MODEL, then redeploy the backend."
         : error.message || "Please try again.");
 
     setStatus({

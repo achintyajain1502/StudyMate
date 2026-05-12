@@ -6,8 +6,6 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
 const app = express();
 
 app.use(
@@ -41,106 +39,117 @@ app.get("/", (req, res) => {
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
-    gemini: getGeminiConfigSummary(),
+    ai: getOpenAIConfigSummary(),
   });
 });
 
-function getGeminiApiKeys() {
-  const primaryKey = process.env.GEMINI_API_KEY || "";
-  const keyList = process.env.GEMINI_API_KEYS || "";
-  const numberedKeys = Object.keys(process.env)
-    .filter((key) => /^GEMINI_API_KEY_\d+$/.test(key))
-    .sort()
-    .map((key) => process.env[key]);
-
-  return [primaryKey, keyList, ...numberedKeys]
-    .flatMap((value) => String(value || "").split(","))
-    .map((value) => value.trim())
-    .filter(Boolean);
+function getOpenAIApiKey() {
+  return (process.env.OPENAI_API_KEY || "").trim();
 }
 
-function getGeminiModel(apiKey) {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  return genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
-  });
+function getOpenAIModel() {
+  return process.env.OPENAI_MODEL || "gpt-4.1-mini";
 }
 
-function getGeminiConfigSummary() {
+function getOpenAIConfigSummary() {
   return {
-    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
-    keyCount: getGeminiApiKeys().length,
+    provider: "openai",
+    model: getOpenAIModel(),
+    hasKey: Boolean(getOpenAIApiKey()),
   };
 }
 
-async function generateGeminiAnswer(prompt) {
-  const apiKeys = getGeminiApiKeys();
+async function generateOpenAIAnswer(prompt) {
+  const apiKey = getOpenAIApiKey();
 
-  if (apiKeys.length === 0) {
-    const missingKeyError = new Error("GEMINI_API_KEY is missing");
+  if (!apiKey) {
+    const missingKeyError = new Error("OPENAI_API_KEY is missing");
     missingKeyError.status = 500;
     throw missingKeyError;
   }
 
-  let lastError;
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: getOpenAIModel(),
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are StudyMate, an AI notes assistant. Answer only from the provided notes.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.2,
+    }),
+  });
 
-  for (const apiKey of apiKeys) {
-    try {
-      const model = getGeminiModel(apiKey);
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
-    } catch (error) {
-      lastError = error;
-      const geminiError = classifyGeminiError(error);
+  const data = await response.json().catch(() => ({}));
 
-      if (geminiError.status !== 429) {
-        throw error;
-      }
-    }
+  if (!response.ok) {
+    const apiError = new Error(data?.error?.message || response.statusText);
+    apiError.status = response.status;
+    apiError.type = data?.error?.type;
+    apiError.code = data?.error?.code;
+    throw apiError;
   }
 
-  throw lastError;
+  return data?.choices?.[0]?.message?.content?.trim() || "";
 }
 
 function getErrorStatus(error) {
   return error?.status || error?.statusCode || error?.response?.status;
 }
 
-function classifyGeminiError(error) {
+function classifyOpenAIError(error) {
   const status = getErrorStatus(error);
   const message = String(error?.message || "");
   const lowerMessage = message.toLowerCase();
-  const config = getGeminiConfigSummary();
+  const config = getOpenAIConfigSummary();
 
-  if (status === 400 || lowerMessage.includes("api key not valid")) {
+  if (status === 400) {
     return {
-      status: 401,
-      error: "Gemini API key is invalid.",
-      details: `Check GEMINI_API_KEY in your backend environment, then restart or redeploy the backend. Active model: ${config.model}. Keys detected: ${config.keyCount}.`,
+      status: 400,
+      error: "OpenAI request failed.",
+      details: `${message || "Bad request."} Active model: ${config.model}.`,
     };
   }
 
-  if (status === 401 || status === 403 || lowerMessage.includes("permission")) {
+  if (status === 401 || lowerMessage.includes("incorrect api key")) {
+    return {
+      status: 401,
+      error: "OpenAI API key is invalid.",
+      details: `Check OPENAI_API_KEY in your backend environment, then restart or redeploy the backend. Active model: ${config.model}.`,
+    };
+  }
+
+  if (status === 403 || lowerMessage.includes("permission")) {
     return {
       status: 403,
-      error: "Gemini API key is not authorized for this request.",
-      details: `Verify the key belongs to the right Google AI Studio project and has access to the selected Gemini model. Active model: ${config.model}. Keys detected: ${config.keyCount}.`,
+      error: "OpenAI API key is not authorized for this request.",
+      details: `Verify the key has access to the selected OpenAI model. Active model: ${config.model}.`,
     };
   }
 
   if (status === 429 || lowerMessage.includes("quota") || lowerMessage.includes("rate limit")) {
     return {
       status: 429,
-      error: "Gemini usage limit reached.",
-      details: `Gemini returned 429 for every configured key. Active model: ${config.model}. Keys detected: ${config.keyCount}. Add keys from a different Google Cloud/AI Studio project in GEMINI_API_KEYS, or set GEMINI_MODEL to a model with available quota, then redeploy the backend.`,
+      error: "OpenAI usage limit reached.",
+      details: `OpenAI returned a rate-limit or quota error. Active model: ${config.model}. Check billing/usage limits or set OPENAI_MODEL to another available model, then redeploy the backend.`,
     };
   }
 
   return {
     status: 500,
     error: "Answer failed",
-    details: message || "Unexpected Gemini error",
+    details: message || "Unexpected OpenAI error",
   };
 }
 
@@ -231,12 +240,12 @@ app.post("/ask", async (req, res) => {
   try {
     const { question } = req.body;
 
-    const apiKeys = getGeminiApiKeys();
+    const apiKey = getOpenAIApiKey();
 
-    if (apiKeys.length === 0) {
+    if (!apiKey) {
       return res.status(500).json({
-        error: "Gemini API key missing.",
-        details: "Set GEMINI_API_KEY in your backend environment and restart the backend.",
+        error: "OpenAI API key missing.",
+        details: "Set OPENAI_API_KEY in your backend environment and restart the backend.",
       });
     }
 
@@ -275,16 +284,16 @@ ${question}
 `;
 
     return res.json({
-      answer: await generateGeminiAnswer(prompt),
+      answer: await generateOpenAIAnswer(prompt),
     });
   } catch (error) {
     console.log("ASK ERROR:", error);
 
-    const geminiError = classifyGeminiError(error);
+    const openAIError = classifyOpenAIError(error);
 
-    return res.status(geminiError.status).json({
-      error: geminiError.error,
-      details: geminiError.details,
+    return res.status(openAIError.status).json({
+      error: openAIError.error,
+      details: openAIError.details,
     });
   }
 });
